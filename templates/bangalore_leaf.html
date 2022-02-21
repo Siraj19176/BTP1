@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bangalore Connectivity</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3-geo-projection@4"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chroma-js/2.1.0/chroma.min.js" integrity="sha256-gX8uuyxN8stSMHWO9arnnKyenTOALaVAcVB3b6P87e4=" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3-legend/2.25.6/d3-legend.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A==" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js" integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA==" crossorigin=""></script>
+    <style>
+        /* #map { height: auto; } */
+        /* html, body {
+        height: 100%;
+        } */
+        #map{
+            /* height: 100%; */
+            
+            /* width: 100vh; */
+            height: 100vh;
+            border: 2px solid black;
+            margin: 0 auto;
+            text-align: center;
+            padding: 3px
+        }
+        
+        circle {
+        fill: #fff;
+        fill-opacity: 0.4;
+        stroke: #111;
+        }
+        
+        path{
+            stroke:#333;
+            stroke-width: 0.5px;
+            
+        }
+
+        path.active {
+        fill: pink;
+        fill-opacity: 0.8;
+        }
+        path.selected{
+        fill: #3FADA8;
+        stroke-width: 3px;
+        fill-opacity: 0.8;
+        }
+        circle.active {
+        fill: blue;
+        }
+    </style>
+</head>
+<body style="text-align:center; background-color:#eee">
+    <div class="info" style="float: left;">
+        <i style="font-size:27px" class="fa">&#xf059;</i>
+    </div>
+    <div>Parent Ward: <span id="pward"></span></div>
+    <div>Currently hovering over: <span id="hover_text"></span></div>
+    <div>Connectivity Score: <span id="cs"></span></div>
+    <br>
+    <svg id="wellowise-legend" style="width: 40%; text-align: center" viewBox="0 0 600 40">
+        <g class="legendLinear"> </g>
+
+    </svg>
+    <div id="map"></div>
+    <script>
+        var myElementToCheckIfClicksAreInsideOf = document.querySelector('.info');
+        // Listen for click events on body
+        document.body.addEventListener('click', function (event) {
+            if (myElementToCheckIfClicksAreInsideOf.contains(event.target)) {
+                console.log('clicked inside');
+                window.location.href = '../info'
+            } else {
+                // console.log('clicked outside');
+            }
+        });
+
+        var conn_score;
+
+        var map = L.map('map').setView([12.9716,77.5946], 11);
+
+        L.tileLayer('https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token={accessToken}', {
+        attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, Imagery © <a href="https://www.mapbox.com/">Mapbox</a>',
+        maxZoom: 18,
+        id: 'mapbox/streets-v11',
+        tileSize: 512,
+        zoomOffset: -1,
+        accessToken: 'pk.eyJ1Ijoic2lyYWoxOTE3NiIsImEiOiJja3l6aDh3em8wOTM0MndvMGMxOGlhNm95In0.y15dG1Vlp61g6idwRbVm6w'
+        }).addTo(map);
+
+        function fetchMap(){
+            let xhttp = new XMLHttpRequest()
+            xhttp.onreadystatechange = function (){
+                if(this.readyState==4 && this.status==200){
+                    mapData = JSON.parse(xhttp.responseText)
+                    console.log(mapData)
+                    var geoJsonLayer=L.geoJSON(mapData,{
+                        onEachFeature: function (feature, layer) {
+                            layer.on({
+                                click: onClicked,
+                                mouseover: onMouseover,
+                                mouseout: onMouseout
+                            });
+                                
+                        }
+
+                    }).addTo(map);
+
+                    geoJsonLayer.eachLayer(function(layer){
+                        // console.log(layer)
+                        layer._path.id="ward"+layer.feature.properties.WARD_NO;
+                        layer._path.innerHTML = layer.feature.properties.WARD_NAME;
+                        // console.log(layer.feature.properties.Ward_No)
+                        d3.select(`path#ward${layer.feature.properties.WARD_NO}`).attr('fill-opacity',0);
+                    })
+
+                }
+            }
+            xhttp.open("GET", "https://raw.githubusercontent.com/Siraj19176/BTP1/main/ward_data_bbmp.geojson", true)
+            xhttp.send()
+
+
+        }
+
+        function getWardData(Ward_Name,Ward_No){
+            console.log("Ward Name = "+ Ward_Name)
+            console.log("Ward No = "+ Ward_No)
+
+            let flask_xhttp = new XMLHttpRequest()
+            flask_xhttp.onreadystatechange =function(){
+                if(this.readyState==4 && this.status==200){
+                    conn_score=JSON.parse(flask_xhttp.responseText)
+                    // console.log(conn_score)
+                    let conn_keys=Object.keys(conn_score)
+
+                    let max=1
+
+                    for(let i=0;i<conn_keys.length;i++){
+                        max=Math.max(max,conn_score[conn_keys[i]])
+                    }
+                    f = chroma.scale(chroma.brewer.OrRd).domain([0, max]);
+                    setLegend(max)
+
+                    for(let i=0;i<conn_keys.length;i++){
+                        d3.select(`path#ward${conn_keys[i]}`).attr('fill',f(conn_score[conn_keys[i]]))
+                        d3.select(`path#ward${conn_keys[i]}`).attr('fill-opacity',0.6)
+                    }
+
+
+                }
+            }
+            flask_xhttp.open("GET",`/getScoreBangalore?Ward_No=${Ward_No}`,true)
+            flask_xhttp.send() 
+        }
+
+        function setLegend(max){
+            let quantize = d3.scaleSequential(d3.interpolateRgbBasis(chroma.brewer.OrRd)).domain([0, max])
+
+            let svgLegend = d3.select("svg#wellowise-legend");
+
+            // svgLegend.append("g")
+            //     .attr("class", "legendLinear")
+            //     .attr("transform", "translate(0, 0)");
+
+            let legendLinear = d3.legendColor()
+                .shapeWidth(52.5)
+                .cells(11)
+                .orient('horizontal')
+                //.title("Number of confirmed cases of corona virus in India")
+                .scale(quantize);
+
+            //let legendSize = d3.legendSize()
+
+
+            svgLegend.select(".legendLinear")
+                .call(legendLinear)
+            //.call(legendSize);
+        }
+        function onClicked(e){
+            // console.log(e.target.feature.properties)
+            // if(e.target.feature.properties.Ward_No !== null){
+            //     d3.select(e.originalEvent.path[0]).classed("selected",true)
+            // }
+            
+            // console.log(e.originalEvent.path[0])
+            if(e.target.feature.properties.WARD_NO !== null){
+                getWardData(e.target.feature.properties.WARD_NAME,e.target.feature.properties.WARD_NO)
+                elms=document.getElementsByClassName("selected")
+                for(let i=0;i<elms.length;i++){
+                    elms[i].classList.remove("selected");
+                }
+                d3.select(`path#ward${e.target.feature.properties.WARD_NO}`).classed('selected',true)
+                d3.select('#pward').text(e.target.feature.properties.WARD_NAME)
+                d3.select('#cs').text(0)
+            }
+
+        }
+        function onMouseover(e){
+            // console.log(e)
+            d3.select(e.originalEvent.path[0]).classed("active",true)
+            d3.select('#hover_text').text(e.target.feature.properties.WARD_NAME)
+            let wno=e.target.feature.properties.WARD_NO
+            if(typeof(conn_score)!= 'undefined'){
+                d3.select('#cs').text(conn_score[wno])
+            }
+
+        }
+        function onMouseout(e){
+            d3.select(e.originalEvent.path[0]).classed("active",false)
+            d3.select('#hover_text').text("")
+
+        }
+        
+        fetchMap()
+
+    </script>
+
+    
+</body>
