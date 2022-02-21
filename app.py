@@ -5,7 +5,7 @@ from flask import Flask, render_template, request, json, jsonify
 
 app = Flask(__name__)
 CORS(app)
-score_delhi=pickle.load(open('score_delhi.pkl','rb'))
+score_delhi=pickle.load(open('E:/Sem6/BTP-sem6/btp_notebooks/score_delhi1.pkl','rb'))
 score_bangalore=pickle.load(open('score_bangalore.pkl','rb'))
 
 # print(score_bangalore[1])
@@ -14,6 +14,10 @@ score_bangalore=pickle.load(open('score_bangalore.pkl','rb'))
 @app.route('/home')
 @app.route('/delhi')
 def home():
+    return render_template('delhi_leaf.html')
+
+@app.route('/testdelhi')
+def testdelhi():
     return render_template('delhi.html')
 
 @app.route('/getScoreDelhi')
@@ -28,6 +32,11 @@ def getScoreDelhi():
 
 @app.route('/bangalore')
 def bangalore():
+    return render_template('bangalore_leaf.html')
+
+
+@app.route('/testbangalore')
+def testbangalore():
     return render_template('bangalore.html')
 
 @app.route('/getScoreBangalore')
@@ -36,6 +45,10 @@ def getScoreBangalore():
     data=score_bangalore.get(int(request.args['Ward_No']),{})
     # print(data)
     return jsonify(data)
+
+@app.route('/info')
+def info():
+    return render_template('info.html')
 
 if __name__=='__main__':
     app.run(debug=True)
